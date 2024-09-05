@@ -153,20 +153,15 @@ uint8_t get_piece_type(Board *b, uint8_t rank, uint8_t file) {
 
     if (b->pawns & mask) {
         return PAWN;
-    }
-    else if (b->knights & mask) {
+    } else if (b->knights & mask) {
         return KNIGHT;
-    }
-    else if (b->rooks & mask) {
+    } else if (b->rooks & mask) {
         return ROOK;
-    }
-    else if (b->bishops & mask) {
+    } else if (b->bishops & mask) {
         return BISHOP;
-    }
-    else if (b->queens & mask) {
+    } else if (b->queens & mask) {
         return QUEEN;
-    }
-    else if (b->kings & mask) {
+    } else if (b->kings & mask) {
         return KING;
     }
     return EMPTY;
@@ -192,23 +187,83 @@ void make_move_unchecked(Position *p, Move m) {
     uint64_t from_bit = (1 << m.from);
     uint64_t to_bit = (1 << m.to);
 
+    uint64_t *moved_bitboard;
+    uint64_t *color_bitboard;
+    uint64_t *opposite_color_bitboard;
+
+    if (p->turn == WHITE) {
+        color_bitboard = &p->board.w_pieces;
+        opposite_color_bitboard = &p->board.b_pieces;
+    } else {
+        color_bitboard = &p->board.b_pieces;
+        opposite_color_bitboard = &p->board.w_pieces;
+    }
+
     switch (m.piece) {
         case PAWN:
-            p->board.pawns |= from_bit;
+            moved_bitboard = &p->board.pawns;
             break;
         case KNIGHT:
+            moved_bitboard = &p->board.knights;
             break;
         case BISHOP:
+            moved_bitboard = &p->board.bishops;
             break;
         case ROOK:
+            moved_bitboard = &p->board.rooks;
             break;
         case QUEEN:
+            moved_bitboard = &p->board.queens;
             break;
         case KING:
+            moved_bitboard = &p->board.kings;
             break;
         case EMPTY:
             assert(false);
-            break;
+    }
+
+    *moved_bitboard |= to_bit;
+    *moved_bitboard &= ~from_bit;
+
+    *color_bitboard |= to_bit;
+    *color_bitboard &= ~from_bit;
+
+    if (m.capture) {
+        uint64_t *captured_bitboard;
+
+        switch (m.capture) {
+            case PAWN:
+                captured_bitboard = &p->board.pawns;
+                break;
+            case KNIGHT:
+                captured_bitboard = &p->board.knights;
+                break;
+            case BISHOP:
+                captured_bitboard = &p->board.bishops;
+                break;
+            case ROOK:
+                captured_bitboard = &p->board.rooks;
+                break;
+            case QUEEN:
+                captured_bitboard = &p->board.queens;
+                break;
+            case KING:
+                captured_bitboard = &p->board.kings;
+                break;
+            case EMPTY:
+                __builtin_unreachable();
+        }
+
+        *captured_bitboard &= ~from_bit;
+        *opposite_color_bitboard &= ~from_bit;
+    }
+
+    if (m.ep_square) {
+        // TODO: en passant logic
+    }
+
+    if (m.promotion) {
+        // TODO: promotion logic
     }
 
     p->turn = !p->turn;
@@ -278,7 +333,7 @@ void pawn_moves(Position *p, MoveList *move_list) {
 
     while (single_pushes) {
         Square to = pop_lsb(&single_pushes);  // Get destination square
-        Square from = to + p->turn * 8;
+        Square from = to + 8;
         Move move = {
             .from = from,
             .to = to,
@@ -293,7 +348,7 @@ void pawn_moves(Position *p, MoveList *move_list) {
 
     while (double_pushes) {
         Square to = pop_lsb(&double_pushes);  // Get destination square
-        Square from = to + p->turn * 16;
+        Square from = to + 16;
         Move move = {
             .from = from,
             .to = to,
@@ -304,6 +359,16 @@ void pawn_moves(Position *p, MoveList *move_list) {
             .ep_square = 0
         };
         move_list->items[move_list->count++] = move;  // Add move to the list
+    }
+
+    while (captures) {
+        // TODO:
+        Square to = pop_lsb(&captures);
+    }
+
+    while (en_passant) {
+        // TODO:
+        Square to = pop_lsb(&en_passant);
     }
 }
 
@@ -364,6 +429,8 @@ uint64_t perft(Position *p, size_t depth) {
 
     for (size_t i = 0; i < n_moves; ++i) {
         make_move_unchecked(p, move_list.items[i]);
+        display_board(p);
+        printf("---------------\n");
         nodes += perft(p, depth - 1);
         unmake_move(p, move_list.items[i]);
     }
@@ -372,7 +439,7 @@ uint64_t perft(Position *p, size_t depth) {
 }
 
 int main() {
-    for (size_t i = 1; i < 6; ++i) {
+    for (size_t i = 1; i <= 8; ++i) {
         Position p = default_position();
         uint64_t nodes = perft(&p, i);
         printf("depth: %lu, nodes: %lu\n", i, nodes);
